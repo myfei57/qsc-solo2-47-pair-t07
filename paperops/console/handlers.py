@@ -26,6 +26,17 @@ def state(console: Any, request: Request) -> Response:
     return json_response(console.services.state.view().to_dict())
 
 
+def machine_view(console: Any, request: Request) -> Response:
+    """Release a single-instant frozen view, withheld unless every ordering holds."""
+    view = console.services.machine.require_consistent()
+    return json_response(view.to_dict())
+
+
+def machine_check(console: Any, request: Request) -> Response:
+    """Self-check at one instant without leaking section readings."""
+    return json_response(console.services.machine.check())
+
+
 def counters(console: Any, request: Request) -> Response:
     return json_response(console.services.state.counters())
 

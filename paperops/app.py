@@ -12,6 +12,7 @@ from .console.router import Console
 from .dry import DryService
 from .event import EventBus
 from .glue import GlueService
+from .machine import MachineService
 from .press import PressService
 from .reel import ReelService
 from .state import StateService
@@ -44,6 +45,7 @@ class Services:
     water: WaterService
     audit: AuditService
     state: StateService
+    machine: MachineService
     console: Any = None
 
     def reload(self) -> None:
@@ -101,6 +103,21 @@ def build_services(config: Config) -> Services:
             "water.moisture": water.history(),
         },
     )
+    machine = MachineService(
+        journal,
+        bus,
+        clock,
+        subsystems={
+            "press": press,
+            "dry": dry,
+            "steam": steam,
+            "glue": glue,
+            "cal": cal,
+            "reel": reel,
+            "broke": broke,
+            "water": water,
+        },
+    )
 
     services = Services(
         config=config,
@@ -121,6 +138,7 @@ def build_services(config: Config) -> Services:
         water=water,
         audit=audit,
         state=state,
+        machine=machine,
     )
     services.reload()
     dry.wire()

@@ -69,6 +69,18 @@ class PreGateError(ContractError):
     """Raised when a downstream action runs before its upstream value is durable."""
 
 
+class MachineConsistencyError(ContractError):
+    """Raised when a frozen whole-machine view breaks a production-line ordering."""
+
+    def __init__(self, view, violations) -> None:
+        self.view = view
+        self.violations = tuple(violations)
+        names = ", ".join(violation.rule for violation in self.violations)
+        super().__init__(
+            f"whole-machine view withheld: {len(self.violations)} ordering violation(s): {names}"
+        )
+
+
 class OutOfRangeError(ContractError):
     """Raised when a parameter falls outside its declared band."""
 

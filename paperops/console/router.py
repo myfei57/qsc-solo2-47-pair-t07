@@ -11,6 +11,7 @@ from ..errors import (
     DuplicateStageError,
     LatchClearError,
     LatchSetError,
+    MachineConsistencyError,
     MaintenanceError,
     OutOfRangeError,
     OutOfSequenceError,
@@ -24,13 +25,14 @@ from ..errors import (
     UnknownStageError,
 )
 from . import handlers, operations
-from .http import Request, Response, error_response
+from .http import Request, Response, error_response, json_response
 from .pages import page_names
 
 Handler = Callable[["Console", Request], Response]
 
 CONFLICT = (
     PreGateError,
+    MachineConsistencyError,
     LatchSetError,
     LatchClearError,
     OutOfSequenceError,
@@ -52,6 +54,8 @@ MISSING = (
 ROUTES: tuple[tuple[str, str, Handler], ...] = (
     ("GET", "/healthz", handlers.health),
     ("GET", "/api/state", handlers.state),
+    ("GET", "/api/machine/view", handlers.machine_view),
+    ("GET", "/api/machine/check", handlers.machine_check),
     ("GET", "/api/state/counters", handlers.counters),
     ("GET", "/api/state/routes", handlers.routes),
     ("GET", "/api/state/histories", handlers.histories),
@@ -173,6 +177,21 @@ class Console:
             )
         try:
             return handler(self, request)
+        except MachineConsistencyError as error:
+            view = error.view
+            return json_response(
+                {
+                    "error": str(error),
+                    "status": 409,
+                    "withheld": True,
+                    "tick": view.tick,
+                    "watermark": view.watermark,
+                    "consistent": False,
+                    "violation_count": len(error.violations),
+                    "violations": [violation.to_dict() for violation in error.violations],
+                },
+                status=409,
+            )
         except ContractError as error:
             return error_response(str(error), status=status_for(error))
         except (KeyError, ValueError, TypeError) as error:
