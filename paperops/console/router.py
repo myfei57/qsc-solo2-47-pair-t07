@@ -9,6 +9,7 @@ from ..errors import (
     ContractError,
     DuplicateBatchError,
     DuplicateStageError,
+    InconsistentStateError,
     LatchClearError,
     LatchSetError,
     MaintenanceError,
@@ -31,6 +32,7 @@ Handler = Callable[["Console", Request], Response]
 
 CONFLICT = (
     PreGateError,
+    InconsistentStateError,
     LatchSetError,
     LatchClearError,
     OutOfSequenceError,
@@ -52,6 +54,7 @@ MISSING = (
 ROUTES: tuple[tuple[str, str, Handler], ...] = (
     ("GET", "/healthz", handlers.health),
     ("GET", "/api/state", handlers.state),
+    ("GET", "/api/state/frozen", handlers.frozen_state),
     ("GET", "/api/state/counters", handlers.counters),
     ("GET", "/api/state/routes", handlers.routes),
     ("GET", "/api/state/histories", handlers.histories),

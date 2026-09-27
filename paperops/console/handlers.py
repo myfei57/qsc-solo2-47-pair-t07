@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from ..errors import StaleArtifactError
+from ..errors import InconsistentStateError, StaleArtifactError
 from ..verdict import parse_filter
 from .http import Request, Response, json_response
 from .pages import read_page
@@ -24,6 +24,22 @@ def health(console: Any, request: Request) -> Response:
 
 def state(console: Any, request: Request) -> Response:
     return json_response(console.services.state.view().to_dict())
+
+
+def frozen_state(console: Any, request: Request) -> Response:
+    """Release the whole-machine view only when the line-order checks pass."""
+    try:
+        return json_response(console.services.state.frozen_view())
+    except InconsistentStateError as error:
+        return json_response(
+            {
+                "error": str(error),
+                "status": 409,
+                "frozen_at": error.point.to_dict(),
+                "violations": [violation.to_dict() for violation in error.violations],
+            },
+            409,
+        )
 
 
 def counters(console: Any, request: Request) -> Response:

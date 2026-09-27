@@ -1,5 +1,7 @@
 """Exceptions raised when a control contract is violated."""
 
+from typing import Any, Sequence
+
 
 class ContractError(Exception):
     """Base class for every contract violation raised by the service."""
@@ -75,3 +77,13 @@ class OutOfRangeError(ContractError):
 
 class UnknownSensorError(ContractError):
     """Raised when a moisture sensor is addressed before it is mapped."""
+
+
+class InconsistentStateError(ContractError):
+    """Raised when a frozen whole-machine view fails the line-order checks."""
+
+    def __init__(self, point: Any, violations: Sequence[Any]) -> None:
+        self.point = point
+        self.violations = tuple(violations)
+        detail = "; ".join(str(violation) for violation in self.violations)
+        super().__init__(f"whole-machine view withheld: {detail}")

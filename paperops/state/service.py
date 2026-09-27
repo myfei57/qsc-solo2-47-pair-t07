@@ -3,11 +3,14 @@
 from typing import Any, Mapping, Protocol
 
 from ..clock import LogicalClock
+from ..errors import InconsistentStateError
 from ..event import Event, EventBus, topics
 from ..store import Journal
+from ..store.snapshot import digest_rows
 from ..verdict import VerdictHistory
 from ..version import ArtifactRef, Artifacts, Generations
 from .counters import counters
+from .frozen import FreezePoint, Violation, check_line
 from .view import ControlState
 
 SNAPSHOT_NAME = "control.snapshot"
@@ -54,6 +57,57 @@ class StateService:
 
     def counters(self) -> dict[str, int]:
         return counters(self._bus)
+
+    def frozen_view(self, attempts: int = 3) -> dict[str, Any]:
+        """Render every section at one moment; release it only if the line order holds."""
+        sections, point = self._render_at_one_moment(attempts)
+        checks, violations = check_line(sections)
+        if violations:
+            raise InconsistentStateError(point, violations)
+        return {
+            "tick": point.tick,
+            "watermark": point.watermark,
+            "events": point.events,
+            "digest": digest_rows(sections),
+            "checks": checks,
+            "subsystems": sections,
+        }
+
+    def _freeze_point(self) -> FreezePoint:
+        return FreezePoint(
+            tick=self._clock.tick,
+            watermark=self._journal.watermark,
+            events=self._bus.sequence,
+        )
+
+    def _render_at_one_moment(self, attempts: int) -> tuple[dict[str, Any], FreezePoint]:
+        moved: tuple[FreezePoint, FreezePoint] | None = None
+        for _ in range(max(1, attempts)):
+            before = self._freeze_point()
+            sections = {
+                name: subsystem.view().to_dict()
+                for name, subsystem in self._subsystems.items()
+            }
+            after = self._freeze_point()
+            if before == after:
+                return sections, before
+            moved = (before, after)
+        assert moved is not None  # max(1, attempts) guarantees at least one pass
+        before, after = moved
+        raise InconsistentStateError(
+            after,
+            [
+                Violation(
+                    rule="state.same_moment",
+                    section="state",
+                    expects="every section read at one tick, watermark and event sequence",
+                    actual=(
+                        f"the freeze point moved from {before.to_dict()} "
+                        f"to {after.to_dict()} while the sections were read"
+                    ),
+                )
+            ],
+        )
 
     def snapshot(self) -> dict[str, Any]:
         """Freeze the committed stream and record it as a new snapshot generation."""
